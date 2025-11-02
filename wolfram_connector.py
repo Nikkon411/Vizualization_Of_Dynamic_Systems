@@ -1,4 +1,3 @@
-# wolfram_connector.py
 from wolframclient.evaluation import WolframLanguageSession
 from wolframclient.language import wlexpr
 import atexit

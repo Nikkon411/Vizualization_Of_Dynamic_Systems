@@ -1,5 +1,3 @@
-# lotka_volterra_tabs.py
-
 from wolfram_connector import WolframConnector
 
 # путь к ядру
