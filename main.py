@@ -52,7 +52,6 @@ class CalculationThread(QThread):
         try:
             self.calculation_started.emit()
 
-            # Wolfram запрос: вычисляем численное решение и таблицу
             expr = f"""
             sol = NDSolve[{{
                 x'[t] == {self.alpha}*x[t] - {self.beta}*x[t]*y[t],
@@ -200,6 +199,67 @@ class LotkaVolterraTab(QWidget):
             if not all([a, b, g, d, x0, y0]):
                 QMessageBox.warning(self, "Предупреждение", "Заполните все поля!")
                 return
+
+            # Проверяем, что все значения являются числами
+            def is_valid_number(value):
+                try:
+                    float(value)
+                    return True
+                except ValueError:
+                    return False
+
+            # Список полей для проверки с человеко-читаемыми названиями
+            fields_to_check = [
+                (a, "α (рост жертв)"),
+                (b, "β (смертность жертв)"),
+                (g, "γ (смертность хищников)"),
+                (d, "δ (рост хищников)"),
+                (x0, "x₀ (начальная популяция жертв)"),
+                (y0, "y₀ (начальная популяция хищников)")
+            ]
+
+            # Проверяем каждое поле
+            invalid_fields = []
+            for value, field_name in fields_to_check:
+                if not is_valid_number(value):
+                    invalid_fields.append(field_name)
+
+            # Если есть невалидные поля, показываем ошибку
+            if invalid_fields:
+                error_message = "Следующие поля содержат некорректные числовые значения:\n\n"
+                for field in invalid_fields:
+                    error_message += f"• {field}\n"
+                error_message += "\nПожалуйста, введите корректные числа."
+
+                QMessageBox.critical(self, "Ошибка ввода", error_message)
+                return
+
+            # Проверяем, что начальные популяции не отрицательные
+            if float(x0) < 0 or float(y0) < 0:
+                QMessageBox.warning(
+                    self,
+                    "Предупреждение",
+                    "Начальные популяции не могут быть отрицательными!\n"
+                    f"x₀ = {x0}, y₀ = {y0}"
+                )
+                return
+
+            # Проверяем, что параметры не слишком большие (опционально)
+            # Это предотвращает возможные проблемы с вычислениями
+            for value, field_name in fields_to_check[:4]:  # Только α, β, γ, δ
+                num_value = float(value)
+                if abs(num_value) > 1000:  # Ограничение на очень большие значения
+                    reply = QMessageBox.question(
+                        self,
+                        "Предупреждение",
+                        f"Значение параметра {field_name} = {value} очень большое.\n"
+                        "Это может привести к проблемам с вычислениями.\n"
+                        "Продолжить расчет?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No
+                    )
+                    if reply == QMessageBox.StandardButton.No:
+                        return
 
             # Блокируем кнопку расчета
             self.calc_button.setEnabled(False)
@@ -856,6 +916,8 @@ class MainWindow(QMainWindow):
                                 "Версия 1.0\n"
                                 "Лотка-Вольтерра: модель хищник-жертва\n\n"
                                 "Функции:\n"
+                                
+                                
                                 "• Расчет системы дифферкуенциальных уравнений через Wolfram\n"
                                 "• Визуализация графиков и анимаций\n"
                                 "• Сохранение и загрузка расчетов")
