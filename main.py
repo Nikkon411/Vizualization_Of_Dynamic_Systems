@@ -559,13 +559,52 @@ class LotkaVolterraTab(QWidget):
             return
 
         self.is_animating = True
-        self.animation_timer = self.startTimer(int(self.speed_slider.text()))
+
+        # БЛОКИРУЕМ поле ввода скорости
+        self.speed_slider.setEnabled(False)
+        self.speed_slider.setStyleSheet("""
+            QLineEdit {
+                background-color: #3A3A4A;
+                color: #888888;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+
+        # Проверяем, что скорость - валидное число
+        try:
+            speed = int(self.speed_slider.text())
+            if speed <= 0:
+                speed = 50
+                self.speed_slider.setText("50")
+        except ValueError:
+            speed = 50
+            self.speed_slider.setText("50")
+
+        self.animation_timer = self.startTimer(speed)
 
     def pause_animation(self):
         """Останавливает анимацию"""
         self.is_animating = False
+
+        # РАЗБЛОКИРУЕМ поле ввода скорости
+        self.speed_slider.setEnabled(True)
+        self.speed_slider.setStyleSheet("""
+            QLineEdit {
+                background-color: #2B2B3D;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                padding: 4px;
+            }
+        """)
+
         if hasattr(self, 'animation_timer'):
-            self.killTimer(self.animation_timer)
+            try:
+                self.killTimer(self.animation_timer)
+            except:
+                pass  # Игнорируем ошибки при уничтожении таймера
 
     def stop_animation(self):
         """Полностью останавливает анимацию"""
