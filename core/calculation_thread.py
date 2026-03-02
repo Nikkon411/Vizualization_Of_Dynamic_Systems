@@ -1,12 +1,10 @@
-# calculation_thread.py
 from PyQt6.QtCore import QThread, pyqtSignal
 from config import wolfram
 
 class CalculationThread(QThread):
-    """Поток для вычислений в Wolfram"""
-    calculation_finished = pyqtSignal(list)  # Сигнал с результатом
-    calculation_error = pyqtSignal(str)  # Сигнал с ошибкой
-    calculation_started = pyqtSignal()  # Сигнал начала вычислений
+    calculation_finished = pyqtSignal(list)
+    calculation_error = pyqtSignal(str)
+    calculation_started = pyqtSignal()
 
     def __init__(self, alpha, beta, gamma, delta, x0, y0):
         super().__init__()

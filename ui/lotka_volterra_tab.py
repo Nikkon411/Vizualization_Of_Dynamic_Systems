@@ -1,22 +1,22 @@
-import numpy as np
+from datetime import datetime
 import uuid
-import datetime
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
-from tinydb import TinyDB, Query
+
+from core.calculation_thread import CalculationThread
+from core.database import save_calculation, load_calculation
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QTabWidget, QProgressBar, QMessageBox, QSpacerItem
+    QLabel, QLineEdit, QPushButton, QSpacerItem,
+    QSizePolicy, QTabWidget, QProgressBar, QMessageBox
 )
+
 from PyQt6.QtGui import QFont
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt
 
-from calculation_thread import CalculationThread
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
-db = TinyDB('calculations_db.json')
-
+import numpy as np
 
 class LotkaVolterraTab(QWidget):
     """Вкладка: Модель Лотки–Вольтерра"""
@@ -603,21 +603,10 @@ class LotkaVolterraTab(QWidget):
         }
 
         # Проверяем, существует ли уже такой расчет
-        Calculation = Query()
-        existing = db.search(Calculation.id == self.current_calc_id)
+        result = save_calculation(calc_data)
 
         try:
-            if existing:
-                # Обновляем существующую запись
-                db.update(calc_data, Calculation.id == self.current_calc_id)
-                message = "Расчет обновлен!"
-            else:
-                # Добавляем новую запись
-                db.insert(calc_data)
-                message = "Расчет сохранен!"
-
-
-            QMessageBox.information(self, "Сохранение", message)
+            QMessageBox.information(self, "Сохранение", result)
             return True
 
         except Exception as e:
@@ -628,11 +617,10 @@ class LotkaVolterraTab(QWidget):
         """Загружает расчет по ID"""
 
 
-        Calculation = Query()
-        result = db.search(Calculation.id == calc_id)
+        result = load_calculation(calc_id)
 
         if result:
-            calc = result[0]
+            calc = result
             self.current_calc_id = calc_id
 
             # Заполняем поля формы

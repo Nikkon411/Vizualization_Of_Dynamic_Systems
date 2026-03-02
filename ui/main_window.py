@@ -1,14 +1,20 @@
-# main_window.py
-import sys
+from ui.lotka_volterra_tab import LotkaVolterraTab
+from ui.placeholders import create_placeholder_tab
+from core.database import get_all_calculations, clear_all
+
+from functools import partial
+
+from PyQt6.QtCore import QTimer
+
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QMenuBar, QMenu,
-    QTabWidget, QLabel, QMessageBox, QApplication
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QLabel, QLineEdit, QPushButton, QSpacerItem,
+    QSizePolicy, QTabWidget, QProgressBar, QMessageBox, QMainWindow, QMessageBox, QMenuBar, QApplication
 )
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt
 
-from database import get_all_calculations, clear_all_history
-from LotkaVolteraTab import LotkaVolterraTab
+from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -167,7 +173,7 @@ class MainWindow(QMainWindow):
                 timestamp = calc['timestamp']
 
                 action = QAction(f"α={alpha}, β={beta} — {timestamp}", self)
-                action.triggered.connect(lambda _, cid=calc_id: self.load_calculation(cid))
+                action.triggered.connect(partial(self.load_calculation, calc_id))
                 self.load_menu.addAction(action)
 
         file_menu.addSeparator()
@@ -191,9 +197,7 @@ class MainWindow(QMainWindow):
         if isinstance(current_tab, LotkaVolterraTab):
             success = current_tab.save_current_calculation()
             if success:
-                # Обновляем меню
-                self.refresh_menu_bar()
-                self.menuBar().update()
+                QTimer.singleShot(0, self.refresh_menu_bar)
 
     def load_calculation(self, calc_id):
         """Загружает расчет по ID"""
@@ -204,8 +208,8 @@ class MainWindow(QMainWindow):
         if isinstance(current_tab, LotkaVolterraTab):
             if current_tab.load_calculation_by_id(calc_id):
                 # 1. Принудительно обновляем все графики
-                for _ in range(3):
-                    QApplication.processEvents()
+                ##for _ in range(3):
+                    ##QApplication.processEvents()
 
                 # 2. Создаем НЕ МОДАЛЬНОЕ сообщение
                 msg_box = QMessageBox(self)
@@ -214,7 +218,6 @@ class MainWindow(QMainWindow):
                 msg_box.setIcon(QMessageBox.Icon.Information)
                 msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
 
-                # Ключевой момент: окно НЕ блокирует основной интерфейс
                 msg_box.setModal(False)
 
                 # Показываем окно
@@ -225,23 +228,19 @@ class MainWindow(QMainWindow):
                 # Для ошибок можно оставить обычный QMessageBox
                 QMessageBox.warning(self, "Ошибка", "Не удалось загрузить расчет!")
 
-
     def clear_all_history(self):
-        """Очищает всю историю расчетов"""
         reply = QMessageBox.question(
-            self, 'Подтверждение удаления',
+            self,
+            'Подтверждение удаления',
             'Вы уверены, что хотите удалить ВСЕ сохраненные расчеты?\nЭто действие нельзя отменить!',
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            # Удаляем все записи из базы данных
-            clear_all_history()
+            clear_all()
 
-            # Обновляем меню загрузки
-            self.refresh_menu_bar()
-            self.menuBar().update()
+            QTimer.singleShot(0, self.refresh_menu_bar)
 
             QMessageBox.information(self, "Очистка", "Вся история расчетов удалена!")
 
@@ -252,7 +251,9 @@ class MainWindow(QMainWindow):
                                 "Версия 1.0\n"
                                 "Лотка-Вольтерра: модель хищник-жертва\n\n"
                                 "Функции:\n"
-                                "• Расчет системы дифференциальных уравнений через Wolfram\n"
+
+
+                                "• Расчет системы дифферкуенциальных уравнений через Wolfram\n"
                                 "• Визуализация графиков и анимаций\n"
                                 "• Сохранение и загрузка расчетов")
 
