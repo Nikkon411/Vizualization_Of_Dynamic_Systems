@@ -1,6 +1,11 @@
 from ui.lotka_volterra_tab import LotkaVolterraTab
+from ui.competing_species_tab import CompetingSpeciesTab
 from ui.placeholders import create_placeholder_tab
 from core.database import get_all_calculations, clear_all
+from ui.competing_species_tab import CompetingSpeciesTab
+from core.database import load_calculation
+from datetime import datetime
+
 
 from functools import partial
 
@@ -42,8 +47,9 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         self.tabs = tabs
         self.lotka_tab = LotkaVolterraTab()
+        self.competing_species_tab = CompetingSpeciesTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
-        tabs.addTab(self.create_placeholder_tab("Маятник"), "Маятник")
+        tabs.addTab(self.competing_species_tab, "Конкуренция видов")
         tabs.addTab(self.create_placeholder_tab("Система Лоренца"), "Система Лоренца")
         tabs.addTab(self.create_placeholder_tab("Химическая реакция"), "Химическая реакция")
 
@@ -139,10 +145,12 @@ class MainWindow(QMainWindow):
         self.menuBar()
         self.refresh_menu_bar()
 
-    def refresh_menu_bar(self):
-        """Полное безопасное пересоздание меню (исправляет проблему старых QAction)."""
+    from datetime import datetime
+    from functools import partial
 
-        # Полностью пересоздаём меню-бар (не очищаем, а создаём новый объект)
+    def refresh_menu_bar(self):
+        """Красивое пересоздание меню с группировкой моделей."""
+
         new_bar = QMenuBar(self)
         self.setMenuBar(new_bar)
 
@@ -155,26 +163,79 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
-        # ---- Загрузить расчет ----
+        # -------- Загрузка --------
         self.load_menu = file_menu.addMenu("📂 Загрузить расчет")
 
         calculations = get_all_calculations()
-        calculations.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        calculations.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
 
         if not calculations:
             a = QAction("Нет сохранённых расчётов", self)
             a.setEnabled(False)
             self.load_menu.addAction(a)
-        else:
-            for calc in calculations:
-                calc_id = calc['id']
-                alpha = calc['alpha']
-                beta = calc['beta']
-                timestamp = calc['timestamp']
 
-                action = QAction(f"α={alpha}, β={beta} — {timestamp}", self)
-                action.triggered.connect(partial(self.load_calculation, calc_id))
-                self.load_menu.addAction(action)
+        else:
+
+            models = {}
+
+            # группируем по моделям
+            for calc in calculations:
+                model = calc.get("model_name", "Модель")
+
+                if model not in models:
+                    models[model] = []
+
+                models[model].append(calc)
+
+            for model_name, calcs in models.items():
+
+                model_menu = self.load_menu.addMenu(f"📊 {model_name}")
+
+                for calc in calcs:
+
+                    calc_id = calc["id"]
+
+                    # ===== красивая дата =====
+                    timestamp = calc.get("timestamp", "")
+
+                    try:
+                        dt = datetime.fromisoformat(timestamp)
+                        timestamp = dt.strftime("%d.%m.%Y %H:%M")
+                    except:
+                        pass
+
+                    # ===== параметры =====
+
+                    params = []
+
+                    # Лотка-Вольтерра
+                    if "alpha" in calc:
+                        params.append(f"α={calc['alpha']}")
+                    if "beta" in calc:
+                        params.append(f"β={calc['beta']}")
+                    if "gamma" in calc:
+                        params.append(f"γ={calc['gamma']}")
+                    if "delta" in calc:
+                        params.append(f"δ={calc['delta']}")
+
+                    # Конкуренция видов
+                    if "p" in calc:
+                        params.append(f"p={calc['p']}")
+                    if "s" in calc:
+                        params.append(f"s={calc['s']}")
+                    if "q" in calc:
+                        params.append(f"q={calc['q']}")
+                    if "t" in calc:
+                        params.append(f"t={calc['t']}")
+
+                    params_text = " ".join(params)
+
+                    text = f"• {params_text} — {timestamp}"
+
+                    action = QAction(text, self)
+                    action.triggered.connect(partial(self.load_calculation, calc_id))
+
+                    model_menu.addAction(action)
 
         file_menu.addSeparator()
 
@@ -184,49 +245,63 @@ class MainWindow(QMainWindow):
 
         # ========== ПОМОЩЬ ==========
         help_menu = new_bar.addMenu("❓ Помощь")
+
         about_action = QAction("ℹ️ О программе", self)
         about_action.triggered.connect(self.show_about)
+
         help_menu.addAction(about_action)
 
     def save_current_calculation(self):
         """Сохраняет текущий расчет"""
-        # Получаем текущую активную вкладку
+
         current_tab = self.tabs.currentWidget()
 
-        # Проверяем, является ли текущая вкладка LotkaVolterraTab
-        if isinstance(current_tab, LotkaVolterraTab):
+        # Проверяем, поддерживает ли вкладка сохранение
+        if hasattr(current_tab, "save_current_calculation"):
+
             success = current_tab.save_current_calculation()
+
             if success:
                 QTimer.singleShot(0, self.refresh_menu_bar)
 
     def load_calculation(self, calc_id):
         """Загружает расчет по ID"""
-        # Получаем текущую активную вкладку
-        current_tab = self.tabs.currentWidget()
 
-        # Проверяем, является ли текущая вкладка LotkaVolterraTab
-        if isinstance(current_tab, LotkaVolterraTab):
-            if current_tab.load_calculation_by_id(calc_id):
-                # 1. Принудительно обновляем все графики
-                ##for _ in range(3):
-                    ##QApplication.processEvents()
+        calc = load_calculation(calc_id)
 
-                # 2. Создаем НЕ МОДАЛЬНОЕ сообщение
-                msg_box = QMessageBox(self)
-                msg_box.setWindowTitle("Загрузка")
-                msg_box.setText("Расчет успешно загружен!")
-                msg_box.setIcon(QMessageBox.Icon.Information)
-                msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        if not calc:
+            QMessageBox.warning(self, "Ошибка", "Расчет не найден!")
+            return
 
-                msg_box.setModal(False)
+        model = calc.get("model_name")
 
-                # Показываем окно
-                msg_box.show()
+        # ---------- ЛОТКА ВОЛЬТЕРРА ----------
+        if model == "Лотка-Вольтерра":
 
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
 
-            else:
-                # Для ошибок можно оставить обычный QMessageBox
-                QMessageBox.warning(self, "Ошибка", "Не удалось загрузить расчет!")
+                if isinstance(tab, LotkaVolterraTab):
+                    self.tabs.setCurrentIndex(i)
+
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        # ---------- КОНКУРЕНЦИЯ ВИДОВ ----------
+        if model == "Конкуренция видов":
+
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+
+                if isinstance(tab, CompetingSpeciesTab):
+                    self.tabs.setCurrentIndex(i)
+
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        QMessageBox.warning(self, "Ошибка", "Не удалось загрузить расчет!")
 
     def clear_all_history(self):
         reply = QMessageBox.question(
