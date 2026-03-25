@@ -59,6 +59,36 @@ class CalculationThread(QThread):
                 }}, {{t, 0, 7, 0.1}}]
                 """
 
+                # ---------- МОДЕЛЬ SEIR ----------
+
+            elif self.model == "seir":
+
+                # Принимаем параметры для SEIR
+
+                beta, alpha, gamma, S0, E0, I0, R0, t_max = self.params
+
+                # Добавлено уравнение для E'[t] и параметр alpha
+
+                expr = f"""
+                        sol = NDSolve[{{
+                            S'[t] == -{beta}*S[t]*Inf[t],
+                            Ex'[t] == {beta}*S[t]*Inf[t] - {alpha}*Ex[t],
+                            Inf'[t] == {alpha}*Ex[t] - {gamma}*Inf[t],
+                            R'[t] == {gamma}*Inf[t],
+                            S[0] == {S0},
+                            Ex[0] == {E0},
+                            Inf[0] == {I0},
+                            R[0] == {R0}
+                        }}, {{S, Ex, Inf, R}}, {{t, 0, {t_max}}}];
+
+                        Table[{{
+                            t,
+                            Evaluate[S[t] /. sol[[1]]],
+                            Evaluate[Ex[t] /. sol[[1]]],
+                            Evaluate[Inf[t] /. sol[[1]]],
+                            Evaluate[R[t] /. sol[[1]]]
+                        }}, {{t, 0, {t_max}, 0.5}}]
+                        """
             else:
                 raise ValueError(f"Unknown model: {self.model}")
 

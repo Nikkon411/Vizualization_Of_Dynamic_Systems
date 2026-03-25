@@ -3,6 +3,7 @@ from ui.competing_species_tab import CompetingSpeciesTab
 from ui.placeholders import create_placeholder_tab
 from core.database import get_all_calculations, clear_all
 from ui.competing_species_tab import CompetingSpeciesTab
+from ui.SIR_tab import SIRTab
 from core.database import load_calculation
 from datetime import datetime
 
@@ -48,9 +49,10 @@ class MainWindow(QMainWindow):
         self.tabs = tabs
         self.lotka_tab = LotkaVolterraTab()
         self.competing_species_tab = CompetingSpeciesTab()
+        self.SIR_tab = SIRTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
         tabs.addTab(self.competing_species_tab, "Конкуренция видов")
-        tabs.addTab(self.create_placeholder_tab("Система Лоренца"), "Система Лоренца")
+        tabs.addTab(self.SIR_tab, "Распространение эпидемии")
         tabs.addTab(self.create_placeholder_tab("Химическая реакция"), "Химическая реакция")
 
         main_layout.addWidget(tabs)
@@ -297,6 +299,17 @@ class MainWindow(QMainWindow):
                 if isinstance(tab, CompetingSpeciesTab):
                     self.tabs.setCurrentIndex(i)
 
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+
+                    return
+
+                # ---------- ЭПИДЕМИЯ SEIR ----------
+        if model == "Модель эпидемии SEIR":
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+                if isinstance(tab, SIRTab):
+                    self.tabs.setCurrentIndex(i)
                     if tab.load_calculation_by_id(calc_id):
                         QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
                     return
