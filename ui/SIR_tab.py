@@ -48,6 +48,7 @@ class SIRTab(QWidget):
         self.beta_input = QLineEdit("0.8")  # Заражение
         self.alpha_input = QLineEdit("0.2")  # Инкубационный переход
         self.gamma_input = QLineEdit("0.1")# Выздоровление
+        self.mu_input = QLineEdit("0.02")
         self.t_max_input = QLineEdit("100")
 
         # Начальные условия (в долях от единицы)
@@ -59,6 +60,7 @@ class SIRTab(QWidget):
         form_layout.addRow("β (скорость заражения):", self.beta_input)
         form_layout.addRow("α (скорость проявления, 1/инкуб.):", self.alpha_input)
         form_layout.addRow("γ (скорость выздоровления):", self.gamma_input)
+        form_layout.addRow("μ (коэффициент летальности):", self.mu_input)
         form_layout.addRow("T max (время расчета):", self.t_max_input)  # Добавляем в форму
         form_layout.addRow("S₀ (восприимчивые):", self.S0_input)
         form_layout.addRow("E₀ (латентные/контактные):", self.E0_input)
@@ -76,10 +78,15 @@ class SIRTab(QWidget):
 
         self.time_tab = QWidget()
         self.phase_tab = QWidget()
-        self.area_tab = QWidget()  # ВМЕСТО flow_tab
+        self.area_tab = QWidget()
+        self.rt_tab = QWidget()
+        self.incidence_tab = QWidget()
+        self.death_tab = QWidget()
+        self.growth_tab = QWidget()
         self.stats_tab = QWidget()
 
-        self.tabs_list = [self.time_tab, self.phase_tab, self.area_tab, self.stats_tab]
+
+        self.tabs_list = [self.time_tab, self.phase_tab, self.area_tab, self.rt_tab, self.incidence_tab,self.death_tab,self.growth_tab,self.stats_tab]
 
         for tab in self.tabs_list:
             tab.setLayout(QVBoxLayout())
@@ -87,6 +94,10 @@ class SIRTab(QWidget):
         self.graph_tabs.addTab(self.time_tab, "Линейный график")
         self.graph_tabs.addTab(self.area_tab, "Распределение населения")  # Стековый график
         self.graph_tabs.addTab(self.phase_tab, "Фазовый портрет (E vs I)")
+        self.graph_tabs.addTab(self.rt_tab, "Эффективное репродуктивное число")
+        self.graph_tabs.addTab(self.growth_tab, "Темп роста")
+        self.graph_tabs.addTab(self.incidence_tab, "Новые случаи")
+        self.graph_tabs.addTab(self.death_tab, "Летальность")
         self.graph_tabs.addTab(self.stats_tab, "Итог")
 
         layout.addWidget(title)
@@ -158,6 +169,25 @@ class SIRTab(QWidget):
         I = np.array(self.I_data)
         R = np.array(self.R_data)
 
+        mu = float(self.mu_input.text())
+
+        Deaths = R * mu
+        Recovered_Actual = R * (1 - mu)
+
+        growth_rate = np.diff(I) / I[:-1] * 100
+        growth_rate = np.insert(growth_rate, 0, 0)  # Добавляем 0 в начало для соответствия размеру t
+
+        beta = float(self.beta_input.text())
+        alpha = float(self.alpha_input.text())
+        gamma = float(self.gamma_input.text())
+
+        # 1. Расчет Rt = (beta * S) / gamma
+        Rt = (beta * S) / gamma
+
+        # 2. Расчет новых случаев (Incidence)
+        # Это скорость перехода из E в I: dI_new = alpha * E
+        incidence = alpha * E
+
         # 1. Расчет ключевых точек для статистики
         idx_peak = np.argmax(I)
         t_peak = t[idx_peak]
@@ -223,7 +253,82 @@ class SIRTab(QWidget):
         self.phase_tab.layout().addWidget(NavigationToolbar(canvas3, self))
         self.phase_tab.layout().addWidget(canvas3)
 
-        # -------- ГРАФИК 4: Итоговая статистика (Вместо скоростей) --------
+        # -------- ГРАФИК 4: Коэффициент воспроизводства (Rt) --------
+        fig_rt = Figure(figsize=(7, 4))
+        fig_rt.subplots_adjust(bottom=0.20)
+        canvas_rt = FigureCanvas(fig_rt)
+        ax_rt = fig_rt.add_subplot(111)
+
+        ax_rt.plot(t, Rt, color='purple', linewidth=2, label='Rt(t)')
+        # Критическая линия 1.0
+        ax_rt.axhline(1.0, color='red', linestyle='--', linewidth=1.5, label='Порог эпидемии (1.0)')
+
+        # Закрасим область выше единицы (рост) и ниже (затухание)
+        ax_rt.fill_between(t, 1.0, Rt, where=(Rt > 1.0), color='red', alpha=0.1)
+        ax_rt.fill_between(t, 1.0, Rt, where=(Rt <= 1.0), color='green', alpha=0.1)
+
+        ax_rt.set_title("Эффективное репродуктивное число ($R_t$)")
+        ax_rt.set_xlabel("Время");
+        ax_rt.set_ylabel("Rt")
+        ax_rt.legend();
+        ax_rt.grid(True, alpha=0.3)
+        self.rt_tab.layout().addWidget(NavigationToolbar(canvas_rt, self))
+        self.rt_tab.layout().addWidget(canvas_rt)
+
+        # -------- ГРАФИК 5: Новые случаи в день (Incidence) --------
+        fig_inc = Figure(figsize=(7, 4))
+        fig_inc.subplots_adjust(bottom=0.20)
+        canvas_inc = FigureCanvas(fig_inc)
+        ax_inc = fig_inc.add_subplot(111)
+
+        ax_inc.bar(t, incidence, width=(t[1] - t[0]) * 0.8, color='salmon', alpha=0.6, label='Прирост (E -> I)')
+        ax_inc.plot(t, incidence, color='red', linewidth=1.5)  # Плавная линия поверх баров
+
+        ax_inc.set_title("Скорость появления новых инфицированных")
+        ax_inc.set_xlabel("Время");
+        ax_inc.set_ylabel("Доля новых случаев")
+        ax_inc.legend();
+        ax_inc.grid(True, alpha=0.3)
+        self.incidence_tab.layout().addWidget(NavigationToolbar(canvas_inc, self))
+        self.incidence_tab.layout().addWidget(canvas_inc)
+
+        # -------- ГРАФИК: Летальность (Смертность) --------
+        fig_d = Figure(figsize=(7, 4))
+        fig_d.subplots_adjust(bottom=0.20)
+        canvas_d = FigureCanvas(fig_d)
+        ax_d = fig_d.add_subplot(111)
+        ax_d.stackplot(t, Recovered_Actual, Deaths, colors=['green', 'black'],
+                       labels=['Выжившие', 'Умершие'], alpha=0.7)
+        ax_d.set_title("Исход заболевания (Накопительно)")
+        ax_d.set_ylabel("Доля населения")
+        ax_d.set_xlabel("Время")
+        ax_d.legend(loc='upper left')
+        self.death_tab.layout().addWidget(NavigationToolbar(canvas_d, self))
+        self.death_tab.layout().addWidget(canvas_d)
+
+        # -------- ГРАФИК: Темп роста (%) --------
+        fig_g = Figure(figsize=(7, 4))
+        fig_g.subplots_adjust(bottom=0.20)
+        canvas_g = FigureCanvas(fig_g)
+        ax_g = fig_g.add_subplot(111)
+
+        # Рисуем линию темпа роста
+        ax_g.plot(t, growth_rate, color='brown', linewidth=2, label='Темп роста I')
+        ax_g.axhline(0, color='black', linestyle='--', alpha=0.5)  # Линия стабильности
+
+        # Закрашиваем области роста и спада
+        ax_g.fill_between(t, 0, growth_rate, where=(growth_rate > 0), color='red', alpha=0.1)
+        ax_g.fill_between(t, 0, growth_rate, where=(growth_rate <= 0), color='green', alpha=0.1)
+
+        ax_g.set_title("Ежедневный темп изменения числа больных")
+        ax_g.set_ylabel("Прирост (%)")
+        ax_g.set_xlabel("Время")
+        ax_g.set_ylim(-20, 50)  # Ограничим для наглядности (можно убрать)
+        ax_g.grid(True, alpha=0.2)
+        self.growth_tab.layout().addWidget(NavigationToolbar(canvas_g, self))
+        self.growth_tab.layout().addWidget(canvas_g)
+
+        # -------- ГРАФИК 6: Итоговая статистика (Вместо скоростей) --------
         fig4 = Figure(figsize=(7, 4));
         canvas4 = FigureCanvas(fig4)
         ax4 = fig4.add_subplot(111)
