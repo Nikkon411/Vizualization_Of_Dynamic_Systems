@@ -1,3 +1,4 @@
+from ui.ISLM_tab import ISLMTab
 from ui.lotka_volterra_tab import LotkaVolterraTab
 from ui.competing_species_tab import CompetingSpeciesTab
 from ui.placeholders import create_placeholder_tab
@@ -50,10 +51,11 @@ class MainWindow(QMainWindow):
         self.lotka_tab = LotkaVolterraTab()
         self.competing_species_tab = CompetingSpeciesTab()
         self.SIR_tab = SIRTab()
+        self.islm_tab = ISLMTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
         tabs.addTab(self.competing_species_tab, "Конкуренция видов")
         tabs.addTab(self.SIR_tab, "Распространение эпидемии")
-        tabs.addTab(self.create_placeholder_tab("Химическая реакция"), "Химическая реакция")
+        tabs.addTab(self.islm_tab, "IS-LM")
 
         main_layout.addWidget(tabs)
 
@@ -230,6 +232,16 @@ class MainWindow(QMainWindow):
                     if "t" in calc:
                         params.append(f"t={calc['t']}")
 
+                    # ISLM
+                    if "G" in calc:
+                        params.append(f"G={calc['G']}")
+                    if "Ms" in calc:
+                        params.append(f"Ms={calc['Ms']}")
+                    if "I0" in calc:
+                        params.append(f"I₀={calc['I0']}")
+                    if "MPC" in calc:
+                        params.append(f"MPC={calc['MPC']}")
+
                     params_text = " ".join(params)
 
                     text = f"• {params_text} — {timestamp}"
@@ -312,6 +324,16 @@ class MainWindow(QMainWindow):
                     self.tabs.setCurrentIndex(i)
                     if tab.load_calculation_by_id(calc_id):
                         QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        # ----------- ISLM -------------
+        if model == "Макроэкономическая модель IS-LM":
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+                if isinstance(tab, ISLMTab):
+                    self.tabs.setCurrentIndex(i)
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен")
                     return
 
         QMessageBox.warning(self, "Ошибка", "Не удалось загрузить расчет!")

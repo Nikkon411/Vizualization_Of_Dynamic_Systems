@@ -89,6 +89,31 @@ class CalculationThread(QThread):
                             Evaluate[R[t] /. sol[[1]]]
                         }}, {{t, 0, {t_max}, 0.5}}]
                         """
+            elif self.model == "islm":
+                # Распаковываем 12 параметров
+                G, C0, MPC, I0, d, Ms, P, k, h, Y0, i0, t_max = self.params
+
+                # Коэффициенты скорости (можно оставить 0.1 или сделать s_i чуть быстрее)
+                s_y = 0.1
+                s_i = 0.05
+
+                expr = f"""
+                sol = NDSolve[{{
+                    Y'[t] == {s_y} * ({C0} + {MPC}*Y[t] + {I0} - {d}*rate[t] + {G} - Y[t]),
+                    rate'[t] == {s_i} * ({k}*Y[t] - {h}*rate[t] - {Ms}/{P}),
+
+                    Y[0] == {Y0},
+                    rate[0] == {i0}
+                }}, {{Y, rate}}, {{t, 0, {t_max}}}];
+
+                Table[{{
+                    t,
+                    Evaluate[Y[t] /. sol[[1]]],
+                    Evaluate[rate[t] /. sol[[1]]]
+                }}, {{t, 0, {t_max}, 0.5}}]
+                """
+
+
             else:
                 raise ValueError(f"Unknown model: {self.model}")
 
