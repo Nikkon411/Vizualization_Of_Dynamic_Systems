@@ -39,6 +39,10 @@ class CalculationThread(QThread):
                 }}, {{t, 0, 50, 0.1}}]
                 """
 
+                result = wolfram.evaluate(expr)
+
+                self.calculation_finished.emit(result)
+
             # ---------- КОНКУРЕНЦИЯ ВИДОВ ----------
             elif self.model == "competition":
 
@@ -58,6 +62,10 @@ class CalculationThread(QThread):
                     Evaluate[y[t] /. sol[[1]]]
                 }}, {{t, 0, 7, 0.1}}]
                 """
+
+                result = wolfram.evaluate(expr)
+
+                self.calculation_finished.emit(result)
 
                 # ---------- МОДЕЛЬ SEIR ----------
 
@@ -89,6 +97,11 @@ class CalculationThread(QThread):
                             Evaluate[R[t] /. sol[[1]]]
                         }}, {{t, 0, {t_max}, 0.5}}]
                         """
+
+                result = wolfram.evaluate(expr)
+
+                self.calculation_finished.emit(result)
+
             elif self.model == "islm":
                 # Распаковываем 12 параметров
                 G, C0, MPC, I0, d, Ms, P, k, h, Y0, i0, t_max = self.params
@@ -98,28 +111,105 @@ class CalculationThread(QThread):
                 s_i = 0.05
 
                 expr = f"""
-                sol = NDSolve[{{
-                    Y'[t] == {s_y} * ({C0} + {MPC}*Y[t] + {I0} - {d}*rate[t] + {G} - Y[t]),
-                    rate'[t] == {s_i} * ({k}*Y[t] - {h}*rate[t] - {Ms}/{P}),
+                                sol = NDSolve[{{
+                                    Y'[t] == {s_y} * ({C0} + {MPC}*Y[t] + {I0} - {d}*rate[t] + {G} - Y[t]),
+                                    rate'[t] == {s_i} * ({k}*Y[t] - {h}*rate[t] - {Ms}/{P}),
 
-                    Y[0] == {Y0},
-                    rate[0] == {i0}
-                }}, {{Y, rate}}, {{t, 0, {t_max}}}];
+                                    (* "Предохранитель" от отрицательной ставки *)
+                                    WhenEvent[rate[t] < 0, rate[t] -> 0],
 
-                Table[{{
-                    t,
-                    Evaluate[Y[t] /. sol[[1]]],
-                    Evaluate[rate[t] /. sol[[1]]]
-                }}, {{t, 0, {t_max}, 0.5}}]
+                                    Y[0] == {Y0},
+                                    rate[0] == {i0}
+                                }}, {{Y, rate}}, {{t, 0, {t_max}}}];
+
+                                (* Теперь возвращаем 5 значений: t, Y, rate, Y', rate' *)
+                                Table[{{
+                                    t,
+                                    Evaluate[Y[t] /. sol[[1]]],
+                                    Evaluate[Max[0, rate[t] /. sol[[1]]]],
+                                    Evaluate[Y'[t] /. sol[[1]]],
+                                    Evaluate[rate'[t] /. sol[[1]]]
+                                }}, {{t, 0, {t_max}, 0.5}}]
+                                """
+
+                result = wolfram.evaluate(expr)
+
+                self.calculation_finished.emit(result)
+
+
+            elif self.model == "lorenz":
+
+                sig, rho, bet, x0, y0, z0, tm = self.params
+
+
+                epsval = 0.00001
+
+                # ПЕРВЫЙ ЗАПРОС (основной)
+
+                expr1 = f"""
+                sol1 = NDSolve[{{x'[t] == {sig}*(y[t]-x[t]), y'[t] == x[t]*({rho}-z[t])-y[t], z'[t] == x[t]*y[t]-{bet}*z[t], x[0] == {x0}, y[0] == {y0}, z[0] == {z0}}}, {{x, y, z}}, {{t, 0, {tm}}}];
+                data1 = Table[{{t, x[t] /. sol1[[1]], y[t] /. sol1[[1]], z[t] /. sol1[[1]]}}, {{t, 0, {tm}, 0.01}}];
+                data1
                 """
+
+                # ВТОРОЙ ЗАПРОС (с отклонением)
+                x0_perturbed = float(x0) + epsval
+                expr2 = f"""
+                sol2 = NDSolve[{{x'[t] == {sig}*(y[t]-x[t]), y'[t] == x[t]*({rho}-z[t])-y[t], z'[t] == x[t]*y[t]-{bet}*z[t], x[0] == {x0_perturbed}, y[0] == {y0}, z[0] == {z0}}}, {{x, y, z}}, {{t, 0, {tm}}}];
+                data2 = Table[{{t, x[t] /. sol2[[1]]}}, {{t, 0, {tm}, 0.01}}];
+                data2
+                """
+
+                # Выполняем оба запроса
+
+                result1 = wolfram.evaluate(expr1)
+
+                result2 = wolfram.evaluate(expr2)
+
+                # Проверяем, что оба результата получены
+
+                if not result1 or not result2:
+                    raise ValueError("Не удалось получить результаты от Wolfram Kernel")
+
+                # Объединяем результаты
+
+                combined_result = []
+
+                for i in range(len(result1)):
+
+                    t = result1[i][0]
+
+                    x = result1[i][1]
+
+                    y = result1[i][2]
+
+                    z = result1[i][3]
+
+                    # Проверяем, что индекс существует в result2
+
+                    if i < len(result2):
+
+                        diff = abs(x - result2[i][1])
+
+                    else:
+
+                        diff = 0
+
+                        print(f"Предупреждение: нет соответствующего значения в result2 для индекса {i}")
+
+                    combined_result.append([t, x, y, z, diff])
+
+                # Отправляем результат с 5 колонками: t, x, y, z, diff
+
+                self.calculation_finished.emit(combined_result)
 
 
             else:
                 raise ValueError(f"Unknown model: {self.model}")
 
-            result = wolfram.evaluate(expr)
-
-            self.calculation_finished.emit(result)
+            # result = wolfram.evaluate(expr)
+            #
+            # self.calculation_finished.emit(result)
 
         except Exception as e:
             self.calculation_error.emit(str(e))

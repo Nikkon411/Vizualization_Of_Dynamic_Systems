@@ -1,4 +1,5 @@
 from ui.ISLM_tab import ISLMTab
+from ui.lorenz_tab import LorenzTab
 from ui.lotka_volterra_tab import LotkaVolterraTab
 from ui.competing_species_tab import CompetingSpeciesTab
 from ui.placeholders import create_placeholder_tab
@@ -52,10 +53,12 @@ class MainWindow(QMainWindow):
         self.competing_species_tab = CompetingSpeciesTab()
         self.SIR_tab = SIRTab()
         self.islm_tab = ISLMTab()
+        self.lorenz_tab = LorenzTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
         tabs.addTab(self.competing_species_tab, "Конкуренция видов")
         tabs.addTab(self.SIR_tab, "Распространение эпидемии")
         tabs.addTab(self.islm_tab, "IS-LM")
+        tabs.addTab(self.lorenz_tab, "Аттрактор Лоренца")
 
         main_layout.addWidget(tabs)
 
@@ -242,6 +245,12 @@ class MainWindow(QMainWindow):
                     if "MPC" in calc:
                         params.append(f"MPC={calc['MPC']}")
 
+                    # Лоренц
+                    if "sigma" in calc:
+                        params.append(f"σ={calc['sigma']}")
+                    if "rho" in calc:
+                        params.append(f"ρ={calc['rho']}")
+
                     params_text = " ".join(params)
 
                     text = f"• {params_text} — {timestamp}"
@@ -333,7 +342,17 @@ class MainWindow(QMainWindow):
                 if isinstance(tab, ISLMTab):
                     self.tabs.setCurrentIndex(i)
                     if tab.load_calculation_by_id(calc_id):
-                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен")
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        if model == "Система Лоренца":
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+                # Проверяем, что это именно вкладка Лоренца
+                if isinstance(tab, LorenzTab):
+                    self.tabs.setCurrentIndex(i)
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
                     return
 
         QMessageBox.warning(self, "Ошибка", "Не удалось загрузить расчет!")

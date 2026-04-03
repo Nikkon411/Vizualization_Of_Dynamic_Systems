@@ -21,6 +21,7 @@ class ISLMTab(QWidget):
     def __init__(self):
         super().__init__()
         self.t_data, self.Y_data, self.i_data = [], [], []
+        self.dY_dt_data, self.di_dt_data = [], []
         self.calculation_thread = None
         self.current_calc_id = None
         self.init_ui()
@@ -49,7 +50,7 @@ class ISLMTab(QWidget):
         # Динамика и начальные условия
         self.Y0_input = QLineEdit("1800")  # Начнем с нормального уровня дохода
         self.rate0_input = QLineEdit("6")  # Начнем с высокой ставки
-        self.t_max_input = QLineEdit("100")
+        self.t_max_input = QLineEdit("150")
 
         form_layout.addRow("Гос. расходы (G):", self.G_input)
         form_layout.addRow("Потребление (C0 + MPC*Y):", self.C0_input)
@@ -64,7 +65,7 @@ class ISLMTab(QWidget):
         self.progress_bar.setVisible(False)
         self.progress_bar.setRange(0, 0)
 
-        self.calc_button = QPushButton("Рассчитать экономику")
+        self.calc_button = QPushButton("Рассчитать")
         self.calc_button.clicked.connect(self.on_calculate)
 
         self.graph_tabs = QTabWidget()
@@ -73,7 +74,9 @@ class ISLMTab(QWidget):
         self.inv_tab = QWidget()
         self.money_tab = QWidget()
         self.goods_tab = QWidget()
-        self.tabs_list = [self.main_tab, self.dyn_tab, self.inv_tab, self.money_tab, self.goods_tab]
+        self.phase_tab = QWidget()  # Фазовый портрет
+        self.elastic_tab = QWidget()  # Эластичность спроса
+        self.tabs_list = [self.main_tab, self.dyn_tab, self.inv_tab, self.money_tab, self.goods_tab, self.phase_tab, self.elastic_tab]
 
         for tab in self.tabs_list:
             tab.setLayout(QVBoxLayout())
@@ -83,6 +86,9 @@ class ISLMTab(QWidget):
         self.graph_tabs.addTab(self.inv_tab, "Рынок инвестиций")
         self.graph_tabs.addTab(self.money_tab, "Рынок денег")
         self.graph_tabs.addTab(self.goods_tab, "Кейнсианский крест")
+
+        self.graph_tabs.addTab(self.phase_tab, "Фазовый портрет")
+        self.graph_tabs.addTab(self.elastic_tab, "Эластичность спроса")
 
         layout.addWidget(title)
         layout.addLayout(form_layout)
@@ -124,10 +130,13 @@ class ISLMTab(QWidget):
 
     def on_finished(self, result):
         self.calc_button.setEnabled(True)
+        self.calc_button.setText("Рассчитать")
         self.progress_bar.setVisible(False)
         self.t_data = [float(r[0]) for r in result]
         self.Y_data = [float(r[1]) for r in result]
         self.i_data = [float(r[2]) for r in result]
+        self.dY_dt_data = [float(r[3]) for r in result]
+        self.di_dt_data = [float(r[4]) for r in result]
         self.plot_graphs()
 
     def on_error(self, error):
@@ -327,6 +336,83 @@ class ISLMTab(QWidget):
 
         self.goods_tab.layout().addWidget(NavigationToolbar(canvas5, self));
         self.goods_tab.layout().addWidget(canvas5)
+        ##################################################################################
+        fig6 = Figure(figsize=(7, 4))  # Сделаем квадратным для честности фаз
+        fig6.subplots_adjust(bottom=0.20)
+        canvas6 = FigureCanvas(fig6)
+        ax8 = fig6.add_subplot(111)
+
+        # Получаем производные как массивы
+        dY_dt = np.array(self.dY_dt_data)
+        di_dt = np.array(self.di_dt_data)
+
+        # Траектория скоростей (Зеленая спираль)
+        ax8.plot(dY_dt, di_dt, color='darkgreen', linewidth=2.5, label='Фазовая траектория', alpha=0.8)
+
+        # Точка старта и финала скоростей
+        # Финал всегда в (0, 0), когда подстройка завершена.
+        ax8.scatter([dY_dt[0]], [di_dt[0]], color='green', s=100, zorder=5, label='Старт')
+        ax8.scatter([0], [0], color='black', s=150, zorder=6, label='Равновесие (0,0)')
+
+        # Оси координат (крест через ноль)
+        ax8.axhline(y=0, color='black', linewidth=1, linestyle='-')
+        ax8.axvline(x=0, color='black', linewidth=1, linestyle='-')
+
+        # Сетка и подписи
+        ax8.set_xlabel("Скорость изменения Дохода (dY/dt)", fontsize=7)
+        ax8.set_ylabel("Скорость изменения Ставки (di/dt)", fontsize=7)
+        ax8.set_title("Фазовый портрет: Устойчивость системы")
+        ax8.legend(loc='upper right', fontsize='small')
+        ax8.grid(True, which='both', linestyle='--', alpha=0.3)
+
+        self.phase_tab.layout().addWidget(NavigationToolbar(canvas6, self))
+        self.phase_tab.layout().addWidget(canvas6)
+
+        # =========================================================================
+        # 7. ГРАФИК ЭЛАСТИЧНОСТИ СПРОСА НА ДЕНЬГИ ПО СТАВКЕ
+        # =========================================================================
+        # Эластичность = % изменения Спроса / % изменения Ставки
+        # E_i = (dL/di) * (i/L)
+        # В нашей модели L = kY - hi, значит dL/di = -h.
+        # E_i = -h * (i_rate / money_demand)
+
+        fig7 = Figure(figsize=(7, 4))
+        fig7.subplots_adjust(bottom=0.20)
+        canvas7 = FigureCanvas(fig7)
+        ax7 = fig7.add_subplot(111)
+
+        # Считаем спрос на деньги в каждый момент времени
+        real_money_supply = Ms / P
+        L_demand = k * Y - h * i_rate
+
+        # Избегаем деления на ноль (хотя в L деления нет, на всякий случай)
+        safe_L = np.where(L_demand == 0, 1e-9, L_demand)
+
+        # Считаем эластичность (она всегда отрицательная, так как i и L ходят в разные стороны)
+        elasticity_i = -h * (i_rate / safe_L)
+
+        # Траектория эластичности во времени
+        ax7.plot(t, elasticity_i, color='purple', linewidth=2.5, label='Текущая эластичность')
+
+        # Горизонтальная линия -1 (Условная граница эластичности)
+        ax7.axhline(y=-1, color='red', linestyle='--', alpha=0.5, label='Граница (-1)')
+
+        # Точка Финала
+        ax7.scatter([t[-1]], [elasticity_i[-1]], color='black', s=120, zorder=5, label='Финал (E)')
+
+        # Сетка и подписи
+        ax7.set_xlabel("Время (t)", fontsize=11)
+        ax7.set_ylabel("Эластичность спроса по ставке (Ei)", fontsize=7)
+        ax7.set_title("Эластичность спроса на деньги во времени")
+        ax7.legend(loc='lower right', fontsize='small')
+        ax7.grid(True, alpha=0.3)
+
+        # По умолчанию экономисты смотрят наEi, которая обычно < 0.
+        # Ei > -1 (ближе к 0) - спрос неэластичен (люди не реагируют на ставку).
+        # Ei < -1 (дальше от 0) - спрос эластичен (люди сильно реагируют).
+
+        self.elastic_tab.layout().addWidget(NavigationToolbar(canvas7, self))
+        self.elastic_tab.layout().addWidget(canvas7)
 
     # ================= СОХРАНЕНИЕ И ЗАГРУЗКА =================
 
@@ -362,7 +448,10 @@ class ISLMTab(QWidget):
                 # Результаты вычислений
                 't_data': [float(v) for v in self.t_data],
                 'Y_data': [float(v) for v in self.Y_data],
-                'i_data': [float(v) for v in self.i_data]
+                'i_data': [float(v) for v in self.i_data],
+
+                'dY_dt_data': [float(v) for v in self.dY_dt_data],
+                'di_dt_data': [float(v) for v in self.di_dt_data]
             }
 
             result = save_calculation(calc_data)
@@ -398,6 +487,9 @@ class ISLMTab(QWidget):
                 self.t_data = calc['t_data']
                 self.Y_data = calc['Y_data']
                 self.i_data = calc['i_data']
+
+                self.dY_dt_data = calc.get('dY_dt_data', [])
+                self.di_dt_data = calc.get('di_dt_data', [])
                 self.plot_graphs()
             return True
         return False
