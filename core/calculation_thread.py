@@ -115,14 +115,14 @@ class CalculationThread(QThread):
                                     Y'[t] == {s_y} * ({C0} + {MPC}*Y[t] + {I0} - {d}*rate[t] + {G} - Y[t]),
                                     rate'[t] == {s_i} * ({k}*Y[t] - {h}*rate[t] - {Ms}/{P}),
 
-                                    (* "Предохранитель" от отрицательной ставки *)
+                                
                                     WhenEvent[rate[t] < 0, rate[t] -> 0],
 
                                     Y[0] == {Y0},
                                     rate[0] == {i0}
                                 }}, {{Y, rate}}, {{t, 0, {t_max}}}];
 
-                                (* Теперь возвращаем 5 значений: t, Y, rate, Y', rate' *)
+                            
                                 Table[{{
                                     t,
                                     Evaluate[Y[t] /. sol[[1]]],
@@ -202,6 +202,34 @@ class CalculationThread(QThread):
                 # Отправляем результат с 5 колонками: t, x, y, z, diff
 
                 self.calculation_finished.emit(combined_result)
+
+                # ---------- МОДЕЛЬ ХЕМОСТАТА ----------
+            elif self.model == "chemostat":
+                # Распаковываем параметры:
+                # D - скорость протока, S0 - входной субстрат, mu_max - макс. рост,
+                # Ks - константа полунасыщения, Y - выход биомассы,
+                # S_init, X_init - начальные условия, t_max - время
+                D, S0, mu_max, Ks, Y, S_init, X_init, t_max = self.params
+
+                expr = f"""
+                            sol = NDSolve[{{
+                                S'[t] == {D}*({S0} - S[t]) - (1/{Y}) * ({mu_max} * S[t] / ({Ks} + S[t])) * X[t],
+                                X'[t] == (({mu_max} * S[t] / ({Ks} + S[t])) - {D}) * X[t],
+                                S[0] == {S_init},
+                                X[0] == {X_init}
+                            }}, {{S, X}}, {{t, 0, {t_max}}}];
+
+                            Table[{{
+                                t,
+                                Evaluate[S[t] /. sol[[1]]],
+                                Evaluate[X[t] /. sol[[1]]]
+                            }}, {{t, 0, {t_max}, 0.1}}]
+                            """
+
+                result = wolfram.evaluate(expr)
+
+                # Возвращаем данные: t, S(t), X(t)
+                self.calculation_finished.emit(result)
 
 
             else:

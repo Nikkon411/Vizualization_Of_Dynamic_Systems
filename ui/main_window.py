@@ -1,4 +1,5 @@
 from ui.ISLM_tab import ISLMTab
+from ui.chemostat_tab import ChemostatTab
 from ui.lorenz_tab import LorenzTab
 from ui.lotka_volterra_tab import LotkaVolterraTab
 from ui.competing_species_tab import CompetingSpeciesTab
@@ -54,11 +55,14 @@ class MainWindow(QMainWindow):
         self.SIR_tab = SIRTab()
         self.islm_tab = ISLMTab()
         self.lorenz_tab = LorenzTab()
+        self.chemostat_tab = ChemostatTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
         tabs.addTab(self.competing_species_tab, "Конкуренция видов")
         tabs.addTab(self.SIR_tab, "Распространение эпидемии")
         tabs.addTab(self.islm_tab, "IS-LM")
         tabs.addTab(self.lorenz_tab, "Аттрактор Лоренца")
+        tabs.addTab(self.chemostat_tab, "Хемостат-модель Михаэлиса-Ментен")
+
 
         main_layout.addWidget(tabs)
 

@@ -64,14 +64,23 @@ class LorenzTab(QWidget):
         self.time_tab = QWidget()
         self.phase_tab = QWidget() # 3D аттрактор
         self.butterfly_tab = QWidget()
+        self.return_map_tab = QWidget()
+        self.projections_tab = QWidget()
+        self.density_tab = QWidget()
+        self.spectrum_tab = QWidget()
 
-        self.tabs_list = [self.time_tab, self.phase_tab,self.butterfly_tab]
+        self.tabs_list = [self.time_tab, self.phase_tab,self.butterfly_tab, self.return_map_tab, self.projections_tab,
+            self.density_tab, self.spectrum_tab]
         for tab in self.tabs_list:
             tab.setLayout(QVBoxLayout())
 
         self.graph_tabs.addTab(self.time_tab, "Временные ряды (X, Y, Z)")
         self.graph_tabs.addTab(self.phase_tab, "3D Фазовый портрет (Аттрактор)")
         self.graph_tabs.addTab(self.butterfly_tab, "Эффект бабочки")
+        self.graph_tabs.addTab(self.return_map_tab, "Карта возврата")
+        self.graph_tabs.addTab(self.projections_tab, "2D Проекции")
+        self.graph_tabs.addTab(self.density_tab, "Плотность состояний")
+        self.graph_tabs.addTab(self.spectrum_tab, "Спектральный анализ")
 
         layout.addWidget(title)
         layout.addLayout(form_layout)
@@ -191,6 +200,91 @@ class LorenzTab(QWidget):
 
         self.butterfly_tab.layout().addWidget(NavigationToolbar(canvas3, self))
         self.butterfly_tab.layout().addWidget(canvas3)
+
+        fig4 = Figure(figsize=(6, 6))
+        fig4.subplots_adjust(bottom=0.20)
+        canvas4 = FigureCanvas(fig4)
+        ax4 = fig4.add_subplot(111)
+
+        # Поиск локальных максимумов Z
+        # Мы ищем точки, которые больше своих соседей
+        z_array = np.array(self.z_data)
+        # Находим индексы максимумов
+        peaks_idx = [i for i in range(1, len(z_array) - 1)
+                     if z_array[i] > z_array[i - 1] and z_array[i] > z_array[i + 1]]
+
+        z_maxima = z_array[peaks_idx]
+
+        if len(z_maxima) > 1:
+            # Строим Z_n против Z_{n-1}
+            # z_maxima[:-1] - это все максимумы кроме последнего (X)
+            # z_maxima[1:] - это все максимумы кроме первого (Y)
+            ax4.scatter(z_maxima[:-1], z_maxima[1:], s=10, color='purple', alpha=0.6)
+
+            ax4.set_title("Карта возврата: $Z_{n}$ vs $Z_{n+1}$")
+            ax4.set_xlabel("Текущий максимум $Z_n$")
+            ax4.set_ylabel("Следующий максимум $Z_{n+1}$")
+            ax4.grid(True, alpha=0.3)
+        else:
+            ax4.text(0.5, 0.5, "Недостаточно данных для поиска максимумов\n(Увеличьте T max)",
+                     ha='center', va='center')
+
+        self.return_map_tab.layout().addWidget(NavigationToolbar(canvas4, self))
+        self.return_map_tab.layout().addWidget(canvas4)
+
+        # --- 5. Вкладка: 2D ПРОЕКЦИИ (Сетка 1x2) ---
+        fig5 = Figure(figsize=(10, 5))
+        fig5.subplots_adjust(bottom=0.20)
+        canvas5 = FigureCanvas(fig5)
+
+        ax_xz = fig5.add_subplot(121)
+        ax_xz.plot(self.x_data, self.z_data, lw=0.5, color='teal')
+        ax_xz.set_title("Проекция X-Z (Вид спереди)")
+        ax_xz.set_xlabel("X")
+        ax_xz.set_ylabel("Z")
+
+        ax_yz = fig5.add_subplot(122)
+        ax_yz.plot(self.y_data, self.z_data, lw=0.5, color='darkorange')
+        ax_yz.set_title("Проекция Y-Z (Вид сбоку)")
+        ax_yz.set_xlabel("Y")
+        ax_yz.set_ylabel("Z")
+
+        self.projections_tab.layout().addWidget(NavigationToolbar(canvas5, self))
+        self.projections_tab.layout().addWidget(canvas5)
+
+        # --- 6. Вкладка: ПЛОТНОСТЬ СОСТОЯНИЙ (Гистограмма) ---
+        fig6 = Figure(figsize=(8, 5))
+        fig6.subplots_adjust(bottom=0.20)
+        canvas6 = FigureCanvas(fig6)
+        ax_hist = fig6.add_subplot(111)
+
+        ax_hist.hist(self.x_data, bins=80, color='skyblue', edgecolor='black', alpha=0.7)
+        ax_hist.set_title("Распределение значений переменной X")
+        ax_hist.set_xlabel("Значение X")
+        ax_hist.set_ylabel("Количество попаданий")
+
+        self.density_tab.layout().addWidget(NavigationToolbar(canvas6, self))
+        self.density_tab.layout().addWidget(canvas6)
+
+        # --- 7. Вкладка: СПЕКТРАЛЬНЫЙ АНАЛИЗ (FFT) ---
+        fig7 = Figure(figsize=(8, 5))
+        fig7.subplots_adjust(bottom=0.20)
+        canvas7 = FigureCanvas(fig7)
+        ax_fft = fig7.add_subplot(111)
+
+        # Вычисляем FFT
+        x_norm = np.array(self.x_data) - np.mean(self.x_data)
+        fft_vals = np.abs(np.fft.rfft(x_norm))
+        freqs = np.fft.rfftfreq(len(self.x_data), d=0.01)  # Шаг 0.01 сек
+
+        ax_fft.semilogy(freqs, fft_vals, color='crimson', lw=1)
+        ax_fft.set_xlim(0, 3)  # Основная энергия хаоса до 10 Гц
+        ax_fft.set_title("Амплитудный спектр мощности (Log-шкала)")
+        ax_fft.set_xlabel("Частота (Гц)")
+        ax_fft.set_ylabel("Амплитуда")
+
+        self.spectrum_tab.layout().addWidget(NavigationToolbar(canvas7, self))
+        self.spectrum_tab.layout().addWidget(canvas7)
 
     def save_current_calculation(self):
         if not self.t_data: return False
