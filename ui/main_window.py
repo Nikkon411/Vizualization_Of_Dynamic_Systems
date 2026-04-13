@@ -1,3 +1,4 @@
+from ui.HindmarshRoseTab import HindmarshRoseTab
 from ui.ISLM_tab import ISLMTab
 from ui.chemostat_tab import ChemostatTab
 from ui.lorenz_tab import LorenzTab
@@ -25,6 +26,9 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
+from ui.vanderpol_tab import VanDerPolTab
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -34,7 +38,7 @@ class MainWindow(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle("Симуляция динамических систем")
-        self.resize(1200, 800)
+
 
         # Центральный виджет
         central_widget = QWidget()
@@ -50,18 +54,27 @@ class MainWindow(QMainWindow):
         # Создаем вкладки
         tabs = QTabWidget()
         self.tabs = tabs
+
+        self.tabs.tabBar().setExpanding(True)  # Растягивает вкладки
+        self.tabs.tabBar().setDocumentMode(True)  # Убирает лишние отступы (по желанию)
+
+
         self.lotka_tab = LotkaVolterraTab()
         self.competing_species_tab = CompetingSpeciesTab()
         self.SIR_tab = SIRTab()
         self.islm_tab = ISLMTab()
         self.lorenz_tab = LorenzTab()
         self.chemostat_tab = ChemostatTab()
+        self.hindmarsh_rose_tab = HindmarshRoseTab()
+        self.vanderpol_tab = VanDerPolTab()
         tabs.addTab(self.lotka_tab, "Лотка–Вольтерра")
         tabs.addTab(self.competing_species_tab, "Конкуренция видов")
         tabs.addTab(self.SIR_tab, "Распространение эпидемии")
         tabs.addTab(self.islm_tab, "IS-LM")
         tabs.addTab(self.lorenz_tab, "Аттрактор Лоренца")
         tabs.addTab(self.chemostat_tab, "Хемостат-модель Михаэлиса-Ментен")
+        tabs.addTab(self.hindmarsh_rose_tab, "Модель Хиндмарша — Роуза")
+        tabs.addTab(self.vanderpol_tab,"Осциллятор Ван дер Поля")
 
 
         main_layout.addWidget(tabs)
@@ -151,6 +164,8 @@ class MainWindow(QMainWindow):
                 background-color: #3C8DAD;
             }
         """)
+
+        self.showMaximized()
 
     def create_menu_bar(self):
         self.menuBar()
@@ -255,6 +270,31 @@ class MainWindow(QMainWindow):
                     if "rho" in calc:
                         params.append(f"ρ={calc['rho']}")
 
+
+                    if 'd_rate'in calc:
+                        params.append(f"D = {calc['d_rate']}")
+                    if 's0_in'in calc:
+                        params.append(f"S0 = {calc['s0_in']}")
+                    if 'mu_max'in calc:
+                        params.append(f"mu_max = {calc['mu_max']}")
+
+
+                    if 'a' in calc:
+                        params.append(f"a = {calc['a']}")
+                    if 'b'in calc:
+                        params.append(f"b = {calc['b']}")
+                    if 'c'in calc:
+                        params.append(f"c = {calc['c']}")
+                    if 'd'in calc:
+                        params.append(f"d = {calc['d']}")
+
+                    if 'mu' in calc:
+                        params.append(f"mu = {calc['mu']}")
+                    if 'x0'in calc:
+                        params.append(f"x0 = {calc['x0']}")
+                    if 'y0'in calc:
+                        params.append(f"y0 = {calc['y0']}")
+
                     params_text = " ".join(params)
 
                     text = f"• {params_text} — {timestamp}"
@@ -355,6 +395,39 @@ class MainWindow(QMainWindow):
                 # Проверяем, что это именно вкладка Лоренца
                 if isinstance(tab, LorenzTab):
                     self.tabs.setCurrentIndex(i)
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        if model == "Модель хемостата":
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+                # Проверяем, что это именно вкладка Хемостата
+                if isinstance(tab, ChemostatTab):
+                    self.tabs.setCurrentIndex(i)
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+        if model == "Модель Хиндмарша — Роуза":
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+                # Проверяем, что это именно вкладка Хидмарша-Роуза
+                if isinstance(tab, HindmarshRoseTab):
+                    self.tabs.setCurrentIndex(i)
+                    if tab.load_calculation_by_id(calc_id):
+                        QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
+                    return
+
+
+        if model == "Осциллятор Ван дер Поля":
+
+            for i in range(self.tabs.count()):
+                tab = self.tabs.widget(i)
+
+                if isinstance(tab, VanDerPolTab):
+                    self.tabs.setCurrentIndex(i)
+
                     if tab.load_calculation_by_id(calc_id):
                         QMessageBox.information(self, "Загрузка", "Расчет успешно загружен!")
                     return

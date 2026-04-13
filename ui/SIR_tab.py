@@ -75,6 +75,10 @@ class SIRTab(QWidget):
         self.calc_button.clicked.connect(self.on_calculate)
 
         self.graph_tabs = QTabWidget()
+        # Более надежный способ для Qt6 без вычислений вручную:
+        self.graph_tabs.setTabBarAutoHide(False)
+        self.graph_tabs.tabBar().setExpanding(True)  # Растягивание
+        self.graph_tabs.tabBar().setDocumentMode(True)  # Убирает лишние рамки
 
         self.time_tab = QWidget()
         self.phase_tab = QWidget()

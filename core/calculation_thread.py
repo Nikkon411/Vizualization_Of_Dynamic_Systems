@@ -231,6 +231,65 @@ class CalculationThread(QThread):
                 # Возвращаем данные: t, S(t), X(t)
                 self.calculation_finished.emit(result)
 
+                # ---------- МОДЕЛЬ ХИНДМАРША — РОУЗА ----------
+            elif self.model == "hindmarsh_rose":
+                # Распаковываем 11 параметров:
+                # a, b, c, d, r, s, I_ext (параметры системы)
+                # x0, y0, z0 (начальные условия)
+                # t_max (время моделирования)
+                a, b, c, d, r, s, i_ext, x0, y0, z0, t_max = self.params
+
+                # Потенциал покоя (стандарт для этой модели)
+                x_rest = -1.6
+
+                expr = f"""
+                            sol = NDSolve[{{
+                                x'[t] == y[t] - {a}*x[t]^3 + {b}*x[t]^2 - z[t] + {i_ext},
+                                y'[t] == {c} - {d}*x[t]^2 - y[t],
+                                z'[t] == {r}*({s}*(x[t] - ({x_rest})) - z[t]),
+                                x[0] == {x0},
+                                y[0] == {y0},
+                                z[0] == {z0}
+                            }}, {{x, y, z}}, {{t, 0, {t_max}}}, MaxSteps -> 100000];
+
+                            Table[{{
+                                t,
+                                Evaluate[x[t] /. sol[[1]]],
+                                Evaluate[y[t] /. sol[[1]]],
+                                Evaluate[z[t] /. sol[[1]]]
+                            }}, {{t, 0, {t_max}, 0.1}}]
+                            """
+
+                result = wolfram.evaluate(expr)
+
+                # Возвращаем 4 колонки: t, x, y, z
+                self.calculation_finished.emit(result)
+
+                # ---------- ОСЦИЛЛЯТОР ВАН ДЕР ПОЛЯ ----------
+            elif self.model == "vanderpol":
+                # Распаковываем параметры:
+                # mu - параметр нелинейности, x0, y0 - нач. условия, t_max - время
+                mu, x0, y0, t_max = self.params
+
+                expr = f"""
+                            sol = NDSolve[{{
+                                x'[t] == y[t],
+                                y'[t] == {mu} * (1 - x[t]^2) * y[t] - x[t],
+                                x[0] == {x0},
+                                y[0] == {y0}
+                            }}, {{x, y}}, {{t, 0, {t_max}}}, MaxSteps -> 50000];
+
+                            Table[{{
+                                t,
+                                Evaluate[x[t] /. sol[[1]]],
+                                Evaluate[y[t] /. sol[[1]]]
+                            }}, {{t, 0, {t_max}, 0.1}}]
+                            """
+
+                result = wolfram.evaluate(expr)
+
+                # Возвращаем 3 колонки: t, x(t), y(t)
+                self.calculation_finished.emit(result)
 
             else:
                 raise ValueError(f"Unknown model: {self.model}")

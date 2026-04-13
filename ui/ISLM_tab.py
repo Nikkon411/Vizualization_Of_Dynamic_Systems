@@ -69,6 +69,10 @@ class ISLMTab(QWidget):
         self.calc_button.clicked.connect(self.on_calculate)
 
         self.graph_tabs = QTabWidget()
+        # Более надежный способ для Qt6 без вычислений вручную:
+        self.graph_tabs.setTabBarAutoHide(False)
+        self.graph_tabs.tabBar().setExpanding(True)  # Растягивание
+        self.graph_tabs.tabBar().setDocumentMode(True)  # Убирает лишние рамки
         self.main_tab = QWidget()  # Основной крест IS-LM
         self.dyn_tab = QWidget()  # Динамика Y и i во времени
         self.inv_tab = QWidget()
